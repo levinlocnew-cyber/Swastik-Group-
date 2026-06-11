@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Premium Swastik Navy Theme */
+  --color-navy-50: #f5f8fc;
+  --color-navy-100: #ebf0fa;
+  --color-navy-200: #d1dcfa;
+  --color-navy-300: #adbeed;
+  --color-navy-400: #8198df;
+  --color-navy-500: #5d75cf;
+  --color-navy-600: #4659b8;
+  --color-navy-700: #33409a;
+  --color-navy-800: #1a235a;
+  --color-navy-900: #0f1437;
+  --color-navy-950: #07091d;
+
+  /* Premium Swastik Gold Accent Theme */
+  --color-gold-50: #fbf9f1;
+  --color-gold-100: #f5eddb;
+  --color-gold-200: #eadcb7;
+  --color-gold-300: #dac389;
+  --color-gold-400: #c9a75d;
+  --color-gold-500: #b98c3b;
+  --color-gold-600: #9e702e;
+  --color-gold-700: #7f5525;
+  --color-gold-800: #613e20;
+  --color-gold-900: #442918;
+  --color-gold-950: #26150d;
+}
+
+/* Base resets & custom animations */
+body {
+  font-family: var(--font-sans);
+  background-color: #fafafa;
+  color: #171717;
+  scroll-behavior: smooth;
+}
+
+/* Custom Hide Scrollbar classes */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Smooth zoom-in/out on active slide */
+.scale-on-hover:hover img {
+  transform: scale(1.05);
+  transition: transform 0.5s ease;
+}
+
+/* Soft pulse for accent indicators */
+@keyframes goldPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.gold-glow {
+  box-shadow: 0 0 15px rgba(185, 140, 59, 0.25);
+}
