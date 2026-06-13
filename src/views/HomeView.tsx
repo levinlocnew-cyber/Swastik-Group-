@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Building2, ShieldCheck, Banknote, Landmark, ArrowRight, Star, Quote, Compass, Calendar, Sparkles } from 'lucide-react';
 import { Property, PropertyCategory, PropertyType } from '../types';
-import { PROPERTIES_DATA, TESTIMONIALS_DATA, LUCKNOW_LOCALITIES } from '../data';
+import { TESTIMONIALS_DATA, LUCKNOW_LOCALITIES } from '../data';
+import { api } from '../utils/api';
 import PropertyCard from '../components/PropertyCard';
 
 interface HomeViewProps {
@@ -47,7 +48,19 @@ export default function HomeView({ setCurrentPage, onViewDetails, setGlobalFilte
     setCurrentPage('properties');
   };
 
-  const featuredProperties = PROPERTIES_DATA.filter(p => p.featured);
+  const [properties, setProperties] = useState<Property[]>([]);
+
+  useEffect(() => {
+    api.properties.list()
+      .then((data) => {
+        setProperties(data || []);
+      })
+      .catch((err) => {
+        console.warn('Fail loading homepage listings from api:', err);
+      });
+  }, []);
+
+  const featuredProperties = properties.filter(p => p.featured);
 
   // Statistics counters
   const stats = [
@@ -61,7 +74,7 @@ export default function HomeView({ setCurrentPage, onViewDetails, setGlobalFilte
     <div id="home-view-wrapper" className="font-sans dark:bg-navy-950 transition-colors">
       
       {/* 1. Hero Section */}
-      <section id="hero-showcase" className="relative h-[88vh] flex items-center justify-center overflow-hidden bg-navy-950">
+      <section id="hero-showcase" className="relative min-h-[calc(100vh-80px)] lg:h-[88vh] flex items-center justify-center overflow-hidden bg-navy-950 pt-8 pb-14 lg:py-0">
         {/* Background Image with optimized dark overlay */}
         <div className="absolute inset-0">
           <img

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Grid, List, SlidersHorizontal, ArrowUpDown, RefreshCw, X, HelpCircle, Sparkles } from 'lucide-react';
 import { Property, PropertyCategory, PropertyType } from '../types';
-import { PROPERTIES_DATA, LUCKNOW_LOCALITIES } from '../data';
+import { LUCKNOW_LOCALITIES } from '../data';
+import { api } from '../utils/api';
 import PropertyCard from '../components/PropertyCard';
 
 interface PropertiesViewProps {
@@ -32,6 +33,22 @@ export default function PropertiesView({ onViewDetails, initialFilters, forceTyp
 
   // simulated loading skeleton state
   const [isLoading, setIsLoading] = useState(false);
+  const [properties, setProperties] = useState<Property[]>([]);
+
+  // Load listings from the API dynamically on load!
+  useEffect(() => {
+    setIsLoading(true);
+    api.properties.list()
+      .then((data) => {
+        setProperties(data || []);
+      })
+      .catch((err) => {
+        console.warn('Fail loading properties from api, fallback loaded:', err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
 
   // Sync state if forceType changes (e.g., clicking Buy Property vs Rent Property in Nav)
   useEffect(() => {
@@ -69,7 +86,7 @@ export default function PropertiesView({ onViewDetails, initialFilters, forceTyp
   };
 
   // Main filter matching equation
-  const filteredProperties = PROPERTIES_DATA.filter((p) => {
+  const filteredProperties = properties.filter((p) => {
     // Constraint 1: Force Type (Buy/Rent limit)
     if (forceType && p.type !== forceType) return false;
     

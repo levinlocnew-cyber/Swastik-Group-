@@ -151,6 +151,9 @@ export default function Footer({ setCurrentPage }: FooterProps) {
         <div className="border-t border-navy-900 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between text-xs text-gray-500">
           <p>© {currentYear} Swastik Group Realty Solutions. All Rights Reserved. Crafted with Premium Standards for Lucknow.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
+            <button onClick={() => handlePageLink('admin')} className="hover:text-gold-450 transition-colors uppercase font-black tracking-widest text-[9px] flex items-center gap-1 cursor-pointer">
+              <span>🔒 Admin Portal</span>
+            </button>
             <a href="#" className="hover:text-gold-450 transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-gold-450 transition-colors">Terms of Service</a>
             <a href="#" className="hover:text-gold-450 transition-colors font-mono">RERA Certified: UP-APPROVED</a>

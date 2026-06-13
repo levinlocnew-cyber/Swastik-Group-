@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Phone, User, Send, Building, CheckCircle2 } from 'lucide-react';
+import { api } from '../utils/api';
 
 interface InquiryFormProps {
   propertyId?: string;
@@ -46,30 +47,15 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
 
     setLoading(true);
 
-    // Simulate database write
-    setTimeout(() => {
-      try {
-        const existingRaw = localStorage.getItem('swastik_custom_inquiries');
-        const list = existingRaw ? JSON.parse(existingRaw) : [];
-        const newInquiry = {
-          id: `inquiry-${Date.now()}`,
-          ...formData,
-          propertyId,
-          propertyName,
-          date: new Date().toLocaleDateString('en-IN', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        };
-        list.unshift(newInquiry);
-        localStorage.setItem('swastik_custom_inquiries', JSON.stringify(list));
-      } catch (err) {
-        console.warn('LocalStorage save failed for inquiry');
-      }
-
+    api.inquiries.submit({
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      phone: `+91 ${formData.phone.trim()}`,
+      message: formData.message.trim(),
+      propertyId,
+      propertyName
+    })
+    .then(() => {
       setLoading(false);
       onSuccess(propertyName 
         ? `Inquiry for "${propertyName}" submitted successfully! Swastik Group office will contact you shortly on WhatsApp/Phone.`
@@ -82,10 +68,14 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
         email: '',
         phone: '',
         message: propertyName 
-          ? `Interested in ${propertyName}. Please call me.`
-          : 'Searching for luxury flats in Lucknow.'
+          ? `Dear Swastik Group, I am highly interested in "${propertyName}" (ID: ${propertyId}). Please share RERA allotment details, pricing break-ups, and schedule a site visit.`
+          : 'Dear Swastik Group, I am searching for premium properties/plots in Lucknow. Please share details of your hot upcoming projects.'
       });
-    }, 1200);
+    })
+    .catch((err) => {
+      setLoading(false);
+      setError(err.message || 'Verification failed. Please try again.');
+    });
   };
 
   return (

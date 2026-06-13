@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, Phone, Search, Moon, Sun, Home, Building, Key, Info, Mail, Award } from 'lucide-react';
+import { Menu, X, Phone, Search, Moon, Sun, Home, Building, Key, Info, Mail, Award, Lock } from 'lucide-react';
 import { OFFICE_CONTACT } from '../data';
 
 interface NavbarProps {
@@ -27,7 +27,8 @@ export default function Navbar({
     { id: 'rent', label: 'Rent Property', icon: Key },
     { id: 'properties', label: 'All Properties', icon: Award },
     { id: 'about', label: 'About Us', icon: Info },
-    { id: 'contact', label: 'Contact Us', icon: Mail }
+    { id: 'contact', label: 'Contact Us', icon: Mail },
+    { id: 'admin', label: 'Admin Portal', icon: Lock }
   ];
 
   const handleNavClick = (id: string) => {

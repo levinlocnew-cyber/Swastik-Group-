@@ -3,6 +3,7 @@ import { X, Search, Sparkles, CheckCircle2, Bookmark, Heart, ArrowUp } from 'luc
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import FloatingButtons from './components/FloatingButtons';
+import WelcomePopup from './components/WelcomePopup';
 
 // Views
 import HomeView from './views/HomeView';
@@ -10,6 +11,7 @@ import PropertiesView from './views/PropertiesView';
 import PropertyDetailsView from './views/PropertyDetailsView';
 import AboutView from './views/AboutView';
 import ContactView from './views/ContactView';
+import AdminView from './views/AdminView';
 
 // Types and helper lists
 import { PropertyType } from './types';
@@ -88,6 +90,19 @@ export default function App() {
     updateSavedPropertiesCount();
     // Watch custom storage alerts for inter-component heart bookmark updates
     window.addEventListener('storage', updateSavedPropertiesCount);
+    
+    // Dynamic search redirect for administrative password reset links
+    try {
+      const queryParams = new URLSearchParams(window.location.search);
+      const resetParam = queryParams.get('resetToken');
+      if (resetParam) {
+        setCurrentPage('admin');
+        addToast('Secure password reset token intercepted. Feel free to update credentials.', 'success');
+      }
+    } catch (e) {
+      // Ignored
+    }
+
     return () => window.removeEventListener('storage', updateSavedPropertiesCount);
   }, []);
 
@@ -215,6 +230,14 @@ export default function App() {
       case 'contact':
         return <ContactView onToast={(msg) => addToast(msg, 'success')} />;
 
+      case 'admin':
+        return (
+          <AdminView
+            onToast={(msg, type) => addToast(msg, type)}
+            setCurrentPage={handleActivePageChange}
+          />
+        );
+
       default:
         return (
           <HomeView
@@ -332,6 +355,9 @@ export default function App() {
 
       {/* Floating Assist Rig */}
       <FloatingButtons />
+
+      {/* Auto-Contact Form Callback Popup on Open */}
+      <WelcomePopup onToast={addToast} />
 
     </div>
   );

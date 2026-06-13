@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin, BedDouble, Bath, Maximize, Landmark, ShieldCheck, Heart, ArrowLeft, Phone, Calendar, Star, HelpCircle } from 'lucide-react';
 import { Property, PropertyCategory } from '../types';
 import { PROPERTIES_DATA, OFFICE_CONTACT } from '../data';
+import { api } from '../utils/api';
 import InquiryForm from '../components/InquiryForm';
 import PropertyCard from '../components/PropertyCard';
 
@@ -19,8 +20,24 @@ export default function PropertyDetailsView({
   onToast
 }: PropertyDetailsViewProps) {
   
-  // Find matching property
-  const property = PROPERTIES_DATA.find(p => p.id === propertyId);
+  // Dynamic state query falling back initially to static default item
+  const [property, setProperty] = useState<Property | null>(() => {
+    return PROPERTIES_DATA.find(p => p.id === propertyId) || null;
+  });
+  const [allProperties, setAllProperties] = useState<Property[]>(PROPERTIES_DATA);
+
+  useEffect(() => {
+    api.properties.get(propertyId).then(data => {
+      if (data) setProperty(data);
+    });
+    api.properties.list().then(data => {
+      if (data && data.length > 0) setAllProperties(data);
+    });
+    setActiveImgIdx(0); // Reset gallery image pointers upon switching IDs
+  }, [propertyId]);
+
+  // Active gallery image index
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
 
   // Fallback if property ID is corrupt
   if (!property) {
@@ -36,18 +53,15 @@ export default function PropertyDetailsView({
     );
   }
 
-  // Active gallery image index
-  const [activeImgIdx, setActiveImgIdx] = useState(0);
-
   // Similar items (same category, excluding current one)
-  const similarItems = PROPERTIES_DATA
+  const similarItems = allProperties
     .filter(p => p.category === property.category && p.id !== property.id)
     .slice(0, 3);
 
   // Fallback similar items if none in same category (just grab featured list)
   const similarShown = similarItems.length > 0 
     ? similarItems 
-    : PROPERTIES_DATA.filter(p => p.id !== property.id).slice(0, 3);
+    : allProperties.filter(p => p.id !== property.id).slice(0, 3);
 
   // Human category helper
   const categoryLabels: Record<string, string> = {
