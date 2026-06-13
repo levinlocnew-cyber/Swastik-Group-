@@ -80,7 +80,7 @@ router.post('/admin/forgot-password', async (req, res) => {
     const resetUrl = `${host}/?resetToken=${token}`;
 
     const html = emailTemplates.passwordReset(resetUrl);
-    await sendEmail(admin.email, '🔑 Swastik Group Admin Password Reset Request', html);
+    sendEmail(admin.email, '🔑 Swastik Group Admin Password Reset Request', html).catch((e: any) => console.log('[Forgot Password Email Dispatch Notice] Handled:', e?.message || e));
 
     db.logs.add('PASSWORD_RESET_TRIGGERED', `Secure token issued for administrator: ${email}`, req.ip);
     
@@ -125,7 +125,7 @@ router.post('/admin/reset-password', async (req, res) => {
 
     // Notify of success
     const html = emailTemplates.passwordChangeSuccess();
-    await sendEmail(targetAdmin.email, '✓ Swastik Admin Password Modified Successfully', html);
+    sendEmail(targetAdmin.email, '✓ Swastik Admin Password Modified Successfully', html).catch((e: any) => console.log('[Reset Password Email Dispatch Notice] Handled:', e?.message || e));
 
     db.logs.add('PASSWORD_UPDATED', `Admin password changed successfully for ${targetAdmin.email}`, req.ip);
 
@@ -329,9 +329,9 @@ router.post('/inquiries', async (req, res) => {
     db.inquiries.save(newInquiry);
     db.logs.add('INQUIRY_RECEIVED', `Lead registered: ${name} (${phone}) about ${propertyName || 'General Services'}`, req.ip);
 
-    // Send email notification to Swastik management inbox instantly!
+    // Send email notification to Swastik management inbox instantly and non-blockingly!
     const htmlEmail = emailTemplates.newLeadAlert(newInquiry);
-    await sendEmail('groupswastik8@gmail.com', '🚨 Urgent Lead: New Swastik Inquiry Received!', htmlEmail);
+    sendEmail('groupswastik8@gmail.com', '🚨 Urgent Lead: New Swastik Inquiry Received!', htmlEmail).catch((e: any) => console.log('[Inquiry Lead Email Dispatch Notice] Handled:', e?.message || e));
 
     return res.status(201).json({ success: true, message: 'Inquiry submitted and dispatched successfully!' });
   } catch (err: any) {

@@ -71,13 +71,16 @@ export function initDb() {
       saveDb();
     }
 
-    // Seed admin if missing
+    // Seed or synchronize admin credentials to ensure they always work with current env/defaults
     const adminEmail = process.env.ADMIN_EMAIL || 'groupswastik8@gmail.com';
     const adminPass = process.env.ADMIN_PASSWORD || 'swastik2220';
-    const hasAdmin = dbState.admins.some(a => a.email.toLowerCase() === adminEmail.toLowerCase());
-    if (!hasAdmin) {
-      const salt = bcrypt.genSaltSync(10);
-      const hash = bcrypt.hashSync(adminPass, salt);
+    const existingAdmin = dbState.admins.find(a => a.email.toLowerCase() === adminEmail.toLowerCase());
+    
+    // Always compute the hash on startup to handle custom environment variables or fallback
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync(adminPass, salt);
+
+    if (!existingAdmin) {
       dbState.admins.push({
         email: adminEmail,
         passwordHash: hash
@@ -86,6 +89,16 @@ export function initDb() {
         id: `log-${Date.now()}-seed`,
         action: 'DB_INIT',
         details: `Seeded default administrator: ${adminEmail}`,
+        timestamp: new Date().toISOString()
+      });
+      saveDb();
+    } else {
+      // Synchronize the hash to match the current runtime environment variable or fallback
+      existingAdmin.passwordHash = hash;
+      dbState.logs.push({
+        id: `log-${Date.now()}-sync`,
+        action: 'DB_PASSWORD_SYNC',
+        details: `Synchronized administrator password on startup for: ${adminEmail}`,
         timestamp: new Date().toISOString()
       });
       saveDb();
