@@ -32,15 +32,19 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim()) {
+    const trimmedName = formData.name.trim();
+    const cleanedPhone = formData.phone.replace(/[^0-9]/g, '');
+    const trimmedEmail = formData.email.trim();
+
+    if (!trimmedName) {
       setError('Please provide your full name');
       return;
     }
-    if (!formData.phone.trim() || formData.phone.length < 10) {
-      setError('Please provide a valid 10-digit Indian mobile number');
+    if (!cleanedPhone || cleanedPhone.length < 10) {
+      setError('Please provide a valid 10-digit mobile number');
       return;
     }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
+    if (trimmedEmail && !trimmedEmail.includes('@')) {
       setError('Please enter a valid email address');
       return;
     }
@@ -48,9 +52,9 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
     setLoading(true);
 
     api.inquiries.submit({
-      name: formData.name.trim(),
-      email: formData.email.trim(),
-      phone: `+91 ${formData.phone.trim()}`,
+      name: trimmedName,
+      email: trimmedEmail || 'not-provided@swastik.com',
+      phone: `+91 ${cleanedPhone.slice(-10)}`,
       message: formData.message.trim(),
       propertyId,
       propertyName
@@ -128,12 +132,11 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
             <input
               type="tel"
               name="phone"
-              pattern="[0-9]{10}"
               placeholder="98765 43210"
               value={formData.phone}
               onChange={handleChange}
-              className="w-full pl-13 pr-4 py-2.5 bg-gray-50 dark:bg-navy-950 text-sm font-medium border border-gray-150 dark:border-navy-800 rounded-xl focus:border-gold-500 focus:ring-1 focus:ring-gold-500 dark:text-white outline-none transition-all"
-              maxLength={10}
+              className="w-full pl-14 pr-4 py-2.5 bg-gray-50 dark:bg-navy-950 text-sm font-medium border border-gray-150 dark:border-navy-800 rounded-xl focus:border-gold-500 focus:ring-1 focus:ring-gold-500 dark:text-white outline-none transition-all"
+              maxLength={15}
               required
             />
           </div>
@@ -142,7 +145,7 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
         {/* Input Email */}
         <div className="relative">
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-            Email Address
+            Email Address <span className="text-gray-400 text-[9px] font-normal font-sans tracking-normal">(Optional)</span>
           </label>
           <div className="relative">
             <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-450 dark:text-gray-500" />
@@ -153,7 +156,6 @@ export default function InquiryForm({ propertyId, propertyName, onSuccess }: Inq
               value={formData.email}
               onChange={handleChange}
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-navy-950 text-sm font-medium border border-gray-150 dark:border-navy-800 rounded-xl focus:border-gold-500 focus:ring-1 focus:ring-gold-500 dark:text-white outline-none transition-all"
-              required
             />
           </div>
         </div>
