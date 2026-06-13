@@ -28,15 +28,47 @@ export function clearToken() {
   }
 }
 
+/**
+ * Safely processes and parses an HTTP Response.
+ * Prevents throwing SyntaxErrors when the backend returns HTML error fallbacks.
+ */
+async function handleResponse(res: Response, fallbackError: string): Promise<any> {
+  const contentType = res.headers.get('content-type');
+  let data: any = {};
+  
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      data = await res.json();
+    } catch (err) {
+      data = { error: 'Failed to process JSON stream.' };
+    }
+  } else {
+    try {
+      const text = await res.text();
+      data = { error: text || `HTTP Status Error ${res.status}` };
+    } catch (err) {
+      data = { error: `HTTP Response Status ${res.status}: ${res.statusText}` };
+    }
+  }
+
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      // Throw clear auth error so client-side handlers can automatically redirect/log out
+      throw new Error(data.error || 'Auth session expired or token is invalid. Please login again.');
+    }
+    throw new Error(data.error || fallbackError);
+  }
+
+  return data;
+}
+
 // Global API endpoints
 export const api = {
   properties: {
     list: async (): Promise<Property[]> => {
       try {
         const res = await fetch(`${API_BASE}/properties`);
-        if (!res.ok) throw new Error('API failed');
-        const data = await res.json();
-        // Fallback to static data if empty
+        const data = await handleResponse(res, 'Fail to query properties compilation.');
         return data && data.length > 0 ? data : PROPERTIES_DATA;
       } catch (err) {
         console.warn('Backend properties fetch failed, using fallback seed data.', err);
@@ -46,8 +78,7 @@ export const api = {
     get: async (id: string): Promise<Property | null> => {
       try {
         const res = await fetch(`${API_BASE}/properties/${id}`);
-        if (!res.ok) throw new Error('API failed');
-        return await res.json();
+        return await handleResponse(res, 'Fail to query property profile details.');
       } catch (err) {
         console.warn('Backend property fetch failed, using fallback list match.', err);
         return PROPERTIES_DATA.find(p => p.id === id) || null;
@@ -62,11 +93,7 @@ export const api = {
         },
         body: JSON.stringify(prop)
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to register property.');
-      }
-      return await res.json();
+      return await handleResponse(res, 'Failed to register property.');
     },
     update: async (token: string, id: string, prop: Partial<Property>): Promise<Property> => {
       const res = await fetch(`${API_BASE}/properties/${id}`, {
@@ -77,11 +104,7 @@ export const api = {
         },
         body: JSON.stringify(prop)
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to update property details.');
-      }
-      return await res.json();
+      return await handleResponse(res, 'Failed to update property details.');
     },
     delete: async (token: string, id: string): Promise<boolean> => {
       const res = await fetch(`${API_BASE}/properties/${id}`, {
@@ -90,10 +113,7 @@ export const api = {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to delete property.');
-      }
+      await handleResponse(res, 'Failed to delete property.');
       return true;
     }
   },
@@ -107,10 +127,7 @@ export const api = {
         },
         body: JSON.stringify(inquiry)
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to submit inquiry lead.');
-      }
+      await handleResponse(res, 'Failed to submit inquiry lead.');
       return true;
     },
     list: async (token: string): Promise<Inquiry[]> => {
@@ -119,8 +136,7 @@ export const api = {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('Inquiries query failed.');
-      return await res.json();
+      return await handleResponse(res, 'Inquiries query failed.');
     },
     delete: async (token: string, id: string): Promise<boolean> => {
       const res = await fetch(`${API_BASE}/inquiries/${id}`, {
@@ -129,7 +145,7 @@ export const api = {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('Failed to delete inquiry.');
+      await handleResponse(res, 'Failed to delete inquiry.');
       return true;
     }
   },
@@ -143,8 +159,7 @@ export const api = {
         },
         body: JSON.stringify({ email })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Newsletter subscription failed.');
+      const data = await handleResponse(res, 'Newsletter subscription failed.');
       return data.message;
     },
     list: async (token: string): Promise<{ id: string; email: string; date: string }[]> => {
@@ -153,8 +168,7 @@ export const api = {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('Subscribers query failed.');
-      return await res.json();
+      return await handleResponse(res, 'Subscribers query failed.');
     }
   },
 
@@ -165,8 +179,7 @@ export const api = {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('Analytics retrieval failed.');
-      return await res.json();
+      return await handleResponse(res, 'Analytics retrieval failed.');
     },
     logs: async (token: string): Promise<any[]> => {
       const res = await fetch(`${API_BASE}/logs`, {
@@ -174,8 +187,7 @@ export const api = {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('Audit logs query failed.');
-      return await res.json();
+      return await handleResponse(res, 'Audit logs query failed.');
     }
   },
 
@@ -183,8 +195,7 @@ export const api = {
     list: async (): Promise<Testimonial[]> => {
       try {
         const res = await fetch(`${API_BASE}/testimonials`);
-        if (!res.ok) throw new Error();
-        return await res.json();
+        return await handleResponse(res, 'Failed to query reviews.');
       } catch {
         return TESTIMONIALS_DATA;
       }
@@ -198,8 +209,7 @@ export const api = {
         },
         body: JSON.stringify(test)
       });
-      if (!res.ok) throw new Error('Testimonial addition failed');
-      return await res.json();
+      return await handleResponse(res, 'Testimonial addition failed');
     },
     delete: async (token: string, id: string): Promise<boolean> => {
       await fetch(`${API_BASE}/testimonials/${id}`, {

@@ -162,7 +162,19 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
         },
         body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
+      
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch {
+          data = { error: 'Failed to parse JSON response from login' };
+        }
+      } else {
+        const text = await res.text().catch(() => '');
+        data = { error: text || `HTTP Error ${res.status}` };
+      }
       
       if (!res.ok) {
         throw new Error(data.error || 'Login verification failed.');
@@ -196,8 +208,21 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
         },
         body: JSON.stringify({ email: forgotEmail })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch {
+          data = { error: 'Failed to parse JSON response.' };
+        }
+      } else {
+        const text = await res.text().catch(() => '');
+        data = { error: text || `HTTP Error ${res.status}` };
+      }
+
+      if (!res.ok) throw new Error(data.error || 'Failed to submit reset request.');
 
       onToast('Reset Link simulated in System Logs! Check Audit Logs panel.', 'success');
       setIsForgotMode(false);
@@ -225,7 +250,6 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
 
     try {
       setSettingsLoading(true);
-      // Simply trigger a secure reset request (simulated for simplicity)
       const res = await fetch('/api/admin/reset-password', {
         method: 'POST',
         headers: {
@@ -233,13 +257,29 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
         },
         body: JSON.stringify({ token: 'SYSTEM_ROOT_DIRECT', newPassword })
       });
-      const data = await res.json();
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch {
+          data = { error: 'Failed to parse JSON response.' };
+        }
+      } else {
+        const text = await res.text().catch(() => '');
+        data = { error: text || `HTTP Error ${res.status}` };
+      }
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update admin password.');
+      }
       
       onToast('Administrative password modified and saved encrypted!', 'success');
       setNewPassword('');
       setNewPasswordConfirm('');
     } catch (err: any) {
-      onToast('Password saved successfully.', 'success');
+      onToast(err.message || 'Failed saving custom password.', 'info');
       setNewPassword('');
       setNewPasswordConfirm('');
     } finally {
