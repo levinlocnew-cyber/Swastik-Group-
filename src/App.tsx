@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Sparkles, CheckCircle2, Bookmark, Heart, ArrowUp } from 'lucide-react';
+import { X, Search, Sparkles, CheckCircle2, Bookmark, Heart, ArrowUp, AlertCircle, Info } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import FloatingButtons from './components/FloatingButtons';
@@ -310,29 +310,40 @@ export default function App() {
 
       {/* Full-screen Stack notification layouts (Toasts) */}
       <div id="toast-carrier" className="fixed bottom-24 left-6 z-50 flex flex-col space-y-2.5 max-w-sm pointer-events-none print:hidden">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className="p-4 bg-white dark:bg-navy-900 border border-gray-100 dark:border-navy-800 rounded-xl shadow-2xl text-left flex items-start gap-3 pointer-events-auto animate-in slide-in-from-left duration-250"
-          >
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold text-navy-900 dark:text-white leading-tight">
-                Notification Alert
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mt-1">
-                {toast.message}
-              </p>
-            </div>
-            <button
-              onClick={() => setToasts(t => t.filter(x => x.id !== toast.id))}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-white shrink-0 cursor-pointer self-start ml-2 text-xs"
-              aria-label="dismis toast notification message"
+        {toasts.map((toast) => {
+          const isSuccess = toast.type === 'success' && !toast.message.includes('Notice') && !toast.message.toLowerCase().includes('fail') && !toast.message.toLowerCase().includes('incorrect');
+          const isNotice = toast.message.toLowerCase().includes('notice') || toast.message.toLowerCase().includes('offline') || toast.message.toLowerCase().includes('sandbox');
+          
+          return (
+            <div
+              key={toast.id}
+              className="p-4 bg-white dark:bg-navy-900 border border-gray-100 dark:border-navy-800 rounded-xl shadow-2xl text-left flex items-start gap-3 pointer-events-auto animate-in slide-in-from-left duration-250"
             >
-              ×
-            </button>
-          </div>
-        ))}
+              {isSuccess ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+              ) : isNotice ? (
+                <Info className="w-5 h-5 text-gold-500 shrink-0 mt-0.5 animate-pulse" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <p className="text-xs font-bold text-navy-900 dark:text-white leading-tight font-display">
+                  {isSuccess ? 'Action Successful' : isNotice ? 'System Notice' : 'Notification Alert'}
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mt-1 font-semibold">
+                  {toast.message}
+                </p>
+              </div>
+              <button
+                onClick={() => setToasts(t => t.filter(x => x.id !== toast.id))}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-white shrink-0 cursor-pointer self-start ml-2 text-xs"
+                aria-label="dismis toast notification message"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {/* Sticky Premium Header Navbar */}
