@@ -5,6 +5,7 @@ import { db } from './db';
 import { generateToken, protectAdminRoute, AuthenticatedRequest } from './auth';
 import { sendEmail, emailTemplates } from './email';
 import { uploadImageToCloudinary } from './cloudinary';
+import { isSupabaseConfigured, uploadImageToSupabase } from './supabase';
 import { Property, Inquiry, Testimonial } from '../src/types';
 
 const router = express.Router();
@@ -14,12 +15,35 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// Helper to dispatch image uploads dynamically across Supabase or Cloudinary
+async function handleImageUpload(imgPayload: string): Promise<string> {
+  if (!imgPayload) return '';
+  if (imgPayload.startsWith('http')) return imgPayload; // Already a URL
+  
+  if (isSupabaseConfigured()) {
+    try {
+      const publicUrl = await uploadImageToSupabase(imgPayload);
+      if (publicUrl) return publicUrl;
+    } catch (err: any) {
+      console.warn('[Image Dispatcher] Supabase upload failed, falling back to Cloudinary.', err?.message || err);
+    }
+  }
+
+  try {
+    return await uploadImageToCloudinary(imgPayload);
+  } catch (err: any) {
+    console.error('[Image Dispatcher] Storage systems upload exception:', err?.message || err);
+    // If everything fails, fail gracefully and don't crash
+    return 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&q=80&w=1200';
+  }
+}
+
 // ----------------------------------------------------
 // 1. ADMIN AUTHENTICATION
 // ----------------------------------------------------
 
 // Admin Login
-router.post('/admin/login', (req, res) => {
+router.post('/admin/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
@@ -27,26 +51,27 @@ router.post('/admin/login', (req, res) => {
       return res.status(400).json({ error: 'Please enter both administrator email and password.' });
     }
 
-    const admin = db.admins.getByEmail(email);
+    const admin = await db.admins.getByEmail(email);
     if (!admin) {
-      db.logs.add('LOGIN_FAILED', `Failed sign-in attempt from email: ${email}`, req.ip);
+      await db.logs.add('LOGIN_FAILED', `Failed sign-in attempt from email: ${email}`, req.ip);
       return res.status(401).json({ error: 'Invalid email address or administrative password.' });
     }
 
     const match = bcrypt.compareSync(password, admin.passwordHash);
     if (!match) {
-      db.logs.add('LOGIN_FAILED', `Failed credential attempts for administrative user: ${email}`, req.ip);
+      await db.logs.add('LOGIN_FAILED', `Failed credential attempts for administrative user: ${email}`, req.ip);
       return res.status(401).json({ error: 'Invalid email address or administrative password.' });
     }
 
     const token = generateToken({ email: admin.email });
-    db.logs.add('LOGIN_SUCCESS', `Administrator ${email} successfully logged into Lucknow Desk`, req.ip);
+    await db.logs.add('LOGIN_SUCCESS', `Administrator ${email} successfully logged into Lucknow Desk`, req.ip);
 
     return res.json({
       token,
       admin: { email: admin.email }
     });
   } catch (err: any) {
+    console.error('[Login Post Error]', err);
     return res.status(500).json({ error: 'Internal server error during login operations.' });
   }
 });
@@ -60,10 +85,10 @@ router.post('/admin/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'Please submit a valid registered administrator email.' });
     }
 
-    const admin = db.admins.getByEmail(email);
+    const admin = await db.admins.getByEmail(email);
     if (!admin) {
       // Return success anyway for security obfuscation, but log it silently
-      db.logs.add('PASSWORD_RESET_ATTEMPT', `Reset attempt for unlisted operator: ${email}`, req.ip);
+      await db.logs.add('PASSWORD_RESET_ATTEMPT', `Reset attempt for unlisted operator: ${email}`, req.ip);
       return res.json({ message: 'If the credentials match, a secure reset token has been dispatched!' });
     }
 
@@ -73,7 +98,7 @@ router.post('/admin/forgot-password', async (req, res) => {
 
     admin.resetToken = token;
     admin.resetTokenExpiry = expiry;
-    db.admins.save(admin);
+    await db.admins.save(admin);
 
     // Host determination
     const host = req.get('origin') || `http://${req.get('host')}` || 'https://swastikgrouplko.com';
@@ -82,10 +107,11 @@ router.post('/admin/forgot-password', async (req, res) => {
     const html = emailTemplates.passwordReset(resetUrl);
     sendEmail(admin.email, '🔑 Swastik Group Admin Password Reset Request', html).catch((e: any) => console.log('[Forgot Password Email Dispatch Notice] Handled:', e?.message || e));
 
-    db.logs.add('PASSWORD_RESET_TRIGGERED', `Secure token issued for administrator: ${email}`, req.ip);
+    await db.logs.add('PASSWORD_RESET_TRIGGERED', `Secure token issued for administrator: ${email}`, req.ip);
     
     return res.json({ message: 'Reset token dispatched safely to groupswastik8@gmail.com!' });
   } catch (err: any) {
+    console.error('[Forgot Password Error]', err);
     return res.status(500).json({ error: 'System fault processing reset request.' });
   }
 });
@@ -105,8 +131,7 @@ router.post('/admin/reset-password', async (req, res) => {
 
     // Scan admins for matching token
     let targetAdmin = null;
-    const allProperties = db.properties.getAll(); // structural lookup to access schema
-    const admin = db.admins.getByEmail('groupswastik8@gmail.com'); // default target
+    const admin = await db.admins.getByEmail('groupswastik8@gmail.com'); // default target
 
     if (admin && (token === 'SYSTEM_ROOT_DIRECT' || (admin.resetToken === token && admin.resetTokenExpiry && admin.resetTokenExpiry > Date.now()))) {
       targetAdmin = admin;
@@ -121,16 +146,17 @@ router.post('/admin/reset-password', async (req, res) => {
     targetAdmin.passwordHash = bcrypt.hashSync(newPassword, salt);
     targetAdmin.resetToken = undefined;
     targetAdmin.resetTokenExpiry = undefined;
-    db.admins.save(targetAdmin);
+    await db.admins.save(targetAdmin);
 
     // Notify of success
     const html = emailTemplates.passwordChangeSuccess();
     sendEmail(targetAdmin.email, '✓ Swastik Admin Password Modified Successfully', html).catch((e: any) => console.log('[Reset Password Email Dispatch Notice] Handled:', e?.message || e));
 
-    db.logs.add('PASSWORD_UPDATED', `Admin password changed successfully for ${targetAdmin.email}`, req.ip);
+    await db.logs.add('PASSWORD_UPDATED', `Admin password changed successfully for ${targetAdmin.email}`, req.ip);
 
     return res.json({ message: 'Administrator password reset and encrypted successfully! You may now login.' });
   } catch (err: any) {
+    console.error('[Reset Password Error]', err);
     return res.status(500).json({ error: 'Fault committing password update.' });
   }
 });
@@ -141,24 +167,26 @@ router.post('/admin/reset-password', async (req, res) => {
 // ----------------------------------------------------
 
 // Get All Properties
-router.get('/properties', (req, res) => {
+router.get('/properties', async (req, res) => {
   try {
-    let propertiesList = db.properties.getAll();
+    const propertiesList = await db.properties.getAll();
     return res.json(propertiesList);
   } catch (err: any) {
+    console.error('[Get Properties Error]', err);
     return res.status(500).json({ error: 'Fail to query properties compilation.' });
   }
 });
 
 // Single Property Details
-router.get('/properties/:id', (req, res) => {
+router.get('/properties/:id', async (req, res) => {
   try {
-    const prop = db.properties.getById(req.params.id);
+    const prop = await db.properties.getById(req.params.id);
     if (!prop) {
       return res.status(404).json({ error: 'Target luxury property profile not found.' });
     }
     return res.json(prop);
   } catch (err: any) {
+    console.error('[Get Property details Error]', err);
     return res.status(500).json({ error: 'Fail to query property profile details.' });
   }
 });
@@ -175,12 +203,12 @@ router.post('/properties', protectAdminRoute, async (req: AuthenticatedRequest, 
       return res.status(400).json({ error: 'Mandatory information fields missing.' });
     }
 
-    // Process images via optional Cloudinary proxy
+    // Process images via unified storage dispatcher (Supabase Storage / Cloudinary)
     const processedImages: string[] = [];
     if (images && Array.isArray(images)) {
       for (const img of images) {
         if (img) {
-          const uploadedUrl = await uploadImageToCloudinary(img);
+          const uploadedUrl = await handleImageUpload(img);
           processedImages.push(uploadedUrl);
         }
       }
@@ -219,8 +247,8 @@ router.post('/properties', protectAdminRoute, async (req: AuthenticatedRequest, 
       }
     };
 
-    db.properties.save(newProperty);
-    db.logs.add('PROPERTY_CREATED', `Property "${name}" created inside database at ${location}`, req.ip);
+    await db.properties.save(newProperty);
+    await db.logs.add('PROPERTY_CREATED', `Property "${name}" created inside database at ${location}`, req.ip);
 
     return res.status(201).json(newProperty);
   } catch (err: any) {
@@ -232,7 +260,7 @@ router.post('/properties', protectAdminRoute, async (req: AuthenticatedRequest, 
 // Authenticated: Update Property Profile
 router.put('/properties/:id', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    const existing = db.properties.getById(req.params.id);
+    const existing = await db.properties.getById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Target property profile not found.' });
     }
@@ -242,12 +270,12 @@ router.put('/properties/:id', protectAdminRoute, async (req: AuthenticatedReques
       bedrooms, bathrooms, amenities, status, featured, reraApproved, reraNumber, images
     } = req.body;
 
-    // Direct Cloudinary process fallback
+    // Process images via unified storage dispatcher
     const processedImages: string[] = [];
     if (images && Array.isArray(images)) {
       for (const img of images) {
         if (img) {
-          const uploadedUrl = await uploadImageToCloudinary(img);
+          const uploadedUrl = await handleImageUpload(img);
           processedImages.push(uploadedUrl);
         }
       }
@@ -274,8 +302,8 @@ router.put('/properties/:id', protectAdminRoute, async (req: AuthenticatedReques
       reraNumber: reraNumber !== undefined ? reraNumber : existing.reraNumber
     };
 
-    db.properties.save(updated);
-    db.logs.add('PROPERTY_UPDATED', `Property "${updated.name}" updated successfully`, req.ip);
+    await db.properties.save(updated);
+    await db.logs.add('PROPERTY_UPDATED', `Property "${updated.name}" updated successfully`, req.ip);
 
     return res.json(updated);
   } catch (err: any) {
@@ -285,18 +313,19 @@ router.put('/properties/:id', protectAdminRoute, async (req: AuthenticatedReques
 });
 
 // Authenticated: Delete a Property
-router.delete('/properties/:id', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.delete('/properties/:id', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    const existing = db.properties.getById(req.params.id);
+    const existing = await db.properties.getById(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Property not found.' });
     }
 
-    db.properties.delete(req.params.id);
-    db.logs.add('PROPERTY_DELETED', `Deleted property "${existing.name}" (ID: ${existing.id})`, req.ip);
+    await db.properties.delete(req.params.id);
+    await db.logs.add('PROPERTY_DELETED', `Deleted property "${existing.name}" (ID: ${existing.id})`, req.ip);
     
     return res.json({ success: true, message: `Successfully deleted "${existing.name}".` });
   } catch (err: any) {
+    console.error('[Delete Property Error]', err);
     return res.status(500).json({ error: 'Critical failure during deletion.' });
   }
 });
@@ -306,7 +335,7 @@ router.delete('/properties/:id', protectAdminRoute, (req: AuthenticatedRequest, 
 // 3. CONTACT & LEAD INQUIRY MANAGEMENT
 // ----------------------------------------------------
 
-// Submit Visitor Inquiry Lead
+// Submit Visitor Inquiry Lead (Contact Form Submission)
 router.post('/inquiries', async (req, res) => {
   try {
     const { name, email, phone, message, propertyId, propertyName } = req.body;
@@ -326,8 +355,8 @@ router.post('/inquiries', async (req, res) => {
       date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
     };
 
-    db.inquiries.save(newInquiry);
-    db.logs.add('INQUIRY_RECEIVED', `Lead registered: ${name} (${phone}) about ${propertyName || 'General Services'}`, req.ip);
+    await db.inquiries.save(newInquiry);
+    await db.logs.add('INQUIRY_RECEIVED', `Lead registered: ${name} (${phone}) about ${propertyName || 'General Services'}`, req.ip);
 
     // Send email notification to Swastik management inbox instantly and non-blockingly!
     const htmlEmail = emailTemplates.newLeadAlert(newInquiry);
@@ -340,27 +369,30 @@ router.post('/inquiries', async (req, res) => {
   }
 });
 
-// Authenticated: Get All Inquiries
-router.get('/inquiries', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+// Authenticated: Get All Inquiries (Dashboard view inquiries)
+router.get('/inquiries', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    const inquiries = db.inquiries.getAll().sort((a,b) => b.id.localeCompare(a.id));
-    return res.json(inquiries);
+    const inquiriesList = await db.inquiries.getAll();
+    const sorted = inquiriesList.sort((a,b) => b.id.localeCompare(a.id));
+    return res.json(sorted);
   } catch (errToFetch: any) {
+    console.error('[Get Inquiries Error]', errToFetch);
     return res.status(500).json({ error: 'Fail to query system inquiries.' });
   }
 });
 
 // Authenticated: Delete an Inquiry Lead
-router.delete('/inquiries/:id', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.delete('/inquiries/:id', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    const inq = db.inquiries.getById(req.params.id);
+    const inq = await db.inquiries.getById(req.params.id);
     if (!inq) {
       return res.status(404).json({ error: 'Lead not found.' });
     }
-    db.inquiries.delete(req.params.id);
-    db.logs.add('INQUIRY_DELETED', `Deleted inquiry received from ${inq.name}`, req.ip);
+    await db.inquiries.delete(req.params.id);
+    await db.logs.add('INQUIRY_DELETED', `Deleted inquiry received from ${inq.name}`, req.ip);
     return res.json({ success: true, message: 'Inquiry deleted successfully.' });
   } catch (err: any) {
+    console.error('[Delete Inquiry Error]', err);
     return res.status(500).json({ error: 'Critical failure during lead removal.' });
   }
 });
@@ -370,29 +402,32 @@ router.delete('/inquiries/:id', protectAdminRoute, (req: AuthenticatedRequest, r
 // 4. NEWSLETTER SUBSCRIPTION
 // ----------------------------------------------------
 
-router.post('/newsletter', (req, res) => {
+router.post('/newsletter', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
 
-    const added = db.subscribers.add(email);
+    const added = await db.subscribers.add(email);
     if (added) {
-      db.logs.add('NEWSLETTER_JOIN', `New subscriber registered: ${email}`, req.ip);
+      await db.logs.add('NEWSLETTER_JOIN', `New subscriber registered: ${email}`, req.ip);
       return res.json({ success: true, message: 'Thank you for subscribing to our newsletters!' });
     } else {
       return res.json({ success: true, message: 'Your email is already registered on our list.' });
     }
   } catch (e: any) {
+    console.error('[Newsletter Sub error]', e);
     return res.status(500).json({ error: 'Newsletter service exception.' });
   }
 });
 
-router.get('/newsletter', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.get('/newsletter', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    return res.json(db.subscribers.getAll());
+    const subscribers = await db.subscribers.getAll();
+    return res.json(subscribers);
   } catch (err: any) {
+    console.error('[Get Subscribers Error]', err);
     return res.status(500).json({ error: 'Fail to load newsletter database.' });
   }
 });
@@ -402,18 +437,16 @@ router.get('/newsletter', protectAdminRoute, (req: AuthenticatedRequest, res) =>
 // 5. ANALYTICS & MONITORING REPORT
 // ----------------------------------------------------
 
-router.get('/analytics', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.get('/analytics', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    const props = db.properties.getAll();
-    const leads = db.inquiries.getAll();
-    const subs = db.subscribers.getAll();
+    const props = await db.properties.getAll();
+    const leads = await db.inquiries.getAll();
+    const subs = await db.subscribers.getAll();
     
     // Status Breakdowns
     const total = props.length;
     const sale = props.filter(p => p.type === 'buy').length;
     const rent = props.filter(p => p.type === 'rent').length;
-    const sold = props.filter(p => p.status === 'Resale' || p.status === 'Ready to Move').length; // simulated status
-    const rented = props.filter(p => p.status === 'For Rent').length;
 
     // Categories
     const categoriesCount = {
@@ -448,16 +481,19 @@ router.get('/analytics', protectAdminRoute, (req: AuthenticatedRequest, res) => 
       recentProperties
     });
   } catch (err: any) {
+    console.error('[Get Analytics Error]', err);
     return res.status(500).json({ error: 'Fail to structure system analytics.' });
   }
 });
 
 // Logs Endpoint
-router.get('/logs', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.get('/logs', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    const logs = db.logs.getAll().sort((a,b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 100);
+    const logsList = await db.logs.getAll();
+    const logs = logsList.sort((a,b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 100);
     return res.json(logs);
   } catch (err: any) {
+    console.error('[Get Audit Logs Error]', err);
     return res.status(500).json({ error: 'Fail to fetch system audit logs.' });
   }
 });
@@ -467,15 +503,17 @@ router.get('/logs', protectAdminRoute, (req: AuthenticatedRequest, res) => {
 // 6. TESTIMONIAL MANAGEMENT
 // ----------------------------------------------------
 
-router.get('/testimonials', (req, res) => {
+router.get('/testimonials', async (req, res) => {
   try {
-    return res.json(db.testimonials.getAll());
+    const list = await db.testimonials.getAll();
+    return res.json(list);
   } catch (err: any) {
+    console.error('[Get Testimonials Error]', err);
     return res.status(500).json({ error: 'Fail to load customer reviews.' });
   }
 });
 
-router.post('/testimonials', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.post('/testimonials', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
     const { name, role, review, rating, image } = req.body;
     if (!name || !review || !rating) {
@@ -492,22 +530,32 @@ router.post('/testimonials', protectAdminRoute, (req: AuthenticatedRequest, res)
       date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })
     };
 
-    db.testimonials.save(test);
-    db.logs.add('TESTIMONIAL_CREATED', `Customer review added by ${name}`, req.ip);
+    await db.testimonials.save(test);
+    await db.logs.add('TESTIMONIAL_CREATED', `Customer review added by ${name}`, req.ip);
     return res.status(201).json(test);
   } catch (err: any) {
+    console.error('[Create Testimonial Error]', err);
     return res.status(500).json({ error: 'Testimonial registration exception.' });
   }
 });
 
-router.delete('/testimonials/:id', protectAdminRoute, (req: AuthenticatedRequest, res) => {
+router.delete('/testimonials/:id', protectAdminRoute, async (req: AuthenticatedRequest, res) => {
   try {
-    db.testimonials.delete(req.params.id);
-    db.logs.add('TESTIMONIAL_DELETED', `Removed review (ID: ${req.params.id})`, req.ip);
+    await db.testimonials.delete(req.params.id);
+    await db.logs.add('TESTIMONIAL_DELETED', `Removed review (ID: ${req.params.id})`, req.ip);
     return res.json({ success: true });
   } catch (err: any) {
+    console.error('[Delete Testimonial Error]', err);
     return res.status(500).json({ error: 'Testimonial deletion exception.' });
   }
+});
+
+// Get Supabase Connectivity and Configuration State
+router.get('/supabase-status', (req, res) => {
+  return res.json({
+    configured: isSupabaseConfigured(),
+    url: process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.substring(0, 18)}...` : null
+  });
 });
 
 export default router;

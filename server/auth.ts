@@ -25,7 +25,7 @@ export interface AuthenticatedRequest extends Request {
   admin?: AdminPayload;
 }
 
-export function protectAdminRoute(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function protectAdminRoute(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -40,7 +40,7 @@ export function protectAdminRoute(req: AuthenticatedRequest, res: Response, next
     }
 
     // Verify admin exists
-    const adminExists = db.admins.getByEmail(decoded.email);
+    const adminExists = await db.admins.getByEmail(decoded.email);
     if (!adminExists) {
       return res.status(403).json({ error: 'Administrator profile does not exist or has been removed.' });
     }

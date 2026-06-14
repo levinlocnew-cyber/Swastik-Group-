@@ -107,7 +107,7 @@ export default function App() {
   }, []);
 
   const addToast = (message: string, type: 'success' | 'info' = 'success') => {
-    const id = `toast-${Date.now()}`;
+    const id = `toast-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));

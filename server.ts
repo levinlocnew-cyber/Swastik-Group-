@@ -6,7 +6,7 @@ import apiRouter from './server/routes';
 
 async function startServer() {
   // Initialize file database & seed records
-  initDb();
+  await initDb();
 
   const app = express();
   const PORT = 3000;

@@ -3,7 +3,7 @@ import {
   Building2, Phone, Mail, Award, Key, LogOut, ChevronRight, LayoutDashboard, 
   MapPin, Plus, Edit, Trash2, CheckCircle2, ShieldAlert, FileText, User, 
   Settings, Users, Send, CheckCircle, RefreshCw, Star, ArrowUpRight, ArrowDownLeft,
-  X, Eye, Sparkles, Building, Landmark, Image as ImageIcon, Map
+  X, Eye, Sparkles, Building, Landmark, Image as ImageIcon, Map, Database
 } from 'lucide-react';
 import { Property, Inquiry, Testimonial } from '../types';
 import { api, getSavedToken, saveToken, clearToken } from '../utils/api';
@@ -37,6 +37,7 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [supabaseStatusState, setSupabaseStatusState] = useState<{ configured: boolean; url: string | null }>({ configured: false, url: null });
 
   // Property editor Modal state
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -84,6 +85,9 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
   const fetchAdminData = async () => {
     try {
       setListLoading(true);
+      // Check Supabase configurations live
+      api.supabase.status().then(setSupabaseStatusState).catch(() => {});
+
       // Pre-load inquiries list on other tabs in the background to ensure sidebar badges are instantly accurate
       if (isAuthenticated && token && activeTab !== 'leads') {
         api.inquiries.list(token).then(setInquiries).catch(() => {});
@@ -623,10 +627,24 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
             </div>
             <div>
               <h1 className="font-display font-black text-lg text-navy-950 dark:text-white leading-none">Swastik Group</h1>
-              <span className="text-[10px] font-mono font-bold text-gray-400 flex items-center gap-1 leading-none mt-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Authorized Operator: groupswastik8@gmail.com
-              </span>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5 leading-none">
+                <span className="text-[10px] font-mono font-bold text-gray-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Operator: groupswastik8@gmail.com
+                </span>
+                
+                {supabaseStatusState.configured ? (
+                  <span className="text-[9px] font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                    <Database className="w-2.5 h-2.5 animate-pulse" />
+                    SUPABASE ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-mono font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                    <Database className="w-2.5 h-2.5" />
+                    SANDBOX (LOCAL JSON)
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1214,54 +1232,115 @@ export default function AdminView({ onToast, setCurrentPage }: AdminViewProps) {
               {activeTab === 'settings' && (
                 <div className="space-y-6 animate-in fade-in-40 duration-200">
                   <div>
-                    <h2 className="font-display font-extrabold text-xl text-navy-950 dark:text-white"> Operations Auth settings </h2>
-                    <p className="text-xs text-gray-400">Manage password codes to control access to Lucknow operator nodes.</p>
+                    <h2 className="font-display font-extrabold text-xl text-navy-950 dark:text-white">System Operations & Integrations</h2>
+                    <p className="text-xs text-gray-400">Manage security credentials and the connected Supabase cloud database instance.</p>
                   </div>
 
-                  <div className="bg-white dark:bg-navy-900 border border-gray-150 dark:border-navy-850 rounded-3xl p-6 shadow-sm text-left max-w-md">
-                    <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    {/* Operations Auth settings Card */}
+                    <div className="bg-white dark:bg-navy-900 border border-gray-150 dark:border-navy-850 rounded-3xl p-6 shadow-sm text-left">
+                      <h3 className="font-display font-black text-sm mb-4 text-navy-950 dark:text-white pb-2 border-b border-gray-150 dark:border-navy-850 animate-pulse">Admin Credentials</h3>
                       
-                      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-1.5 text-xs text-amber-700">
-                        <p className="font-extrabold flex items-center gap-1 leading-none uppercase tracking-wider text-[10px] font-mono">
-                          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-                          Security Guidelines
-                        </p>
-                        <p>Password change modifies the admin credentials of <strong>groupswastik8@gmail.com</strong> inside fallback database files. Resetting hashes passwords securely.</p>
+                      <form onSubmit={handlePasswordChange} className="space-y-4">
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-1.5 text-xs text-amber-700">
+                          <p className="font-extrabold flex items-center gap-1 leading-none uppercase tracking-wider text-[10px] font-mono">
+                            <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+                            Security Guidelines
+                          </p>
+                          <p>Password change modifies the admin credentials of <strong>groupswastik8@gmail.com</strong> inside fallback database files. Resetting hashes passwords securely.</p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-mono font-bold tracking-wider text-gray-400 uppercase">New Dashboard Password</label>
+                          <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="At least 6 characters"
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-navy-950 border border-gray-200 dark:border-navy-800 rounded-xl text-navy-950 dark:text-white outline-none focus:border-gold-400 transition-colors text-xs font-semibold"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-mono font-bold tracking-wider text-gray-400 uppercase">Confirm Password Code</label>
+                          <input
+                            type="password"
+                            value={newPasswordConfirm}
+                            onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                            placeholder="Re-type password code"
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-navy-950 border border-gray-200 dark:border-navy-800 rounded-xl text-navy-950 dark:text-white outline-none focus:border-gold-400 transition-colors text-xs font-semibold"
+                            required
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={settingsLoading}
+                          className="w-full py-3 bg-gold-400 hover:bg-gold-550 text-navy-950 font-black rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 hover:shadow-lg hover:shadow-gold-550/10"
+                        >
+                          {settingsLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
+                          <span>Update Security Credentials</span>
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Supabase Connection details card */}
+                    <div className="bg-white dark:bg-navy-900 border border-gray-150 dark:border-navy-850 rounded-3xl p-6 shadow-sm text-left space-y-4">
+                      <div className="flex items-center space-x-2.5 pb-2 border-b border-gray-150 dark:border-navy-850">
+                        <Database className="w-5 h-5 text-gold-500" />
+                        <div>
+                          <h3 className="font-display font-black text-sm text-navy-950 dark:text-white">Supabase Cloud Sync</h3>
+                          <p className="text-[10px] text-gray-400">Automated synchronization, storage buckets, & Postgres tables</p>
+                        </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono font-bold tracking-wider text-gray-400 uppercase">New Dashboard Password</label>
-                        <input
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="At least 6 characters"
-                          className="w-full px-4 py-3 bg-gray-50 dark:bg-navy-950 border border-gray-200 dark:border-navy-800 rounded-xl text-navy-950 dark:text-white outline-none focus:border-gold-400 transition-colors text-xs font-semibold"
-                          required
-                        />
-                      </div>
+                      <div className="space-y-3">
+                        {supabaseStatusState.configured ? (
+                          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-1">
+                            <p className="text-xs font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-wide flex items-center gap-1.5 leading-none">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                              Direct Link Pipeline Active
+                            </p>
+                            <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/70">
+                              System successfully bridged to Supabase clusters on secure server routers. Image uploads write directly to Supabase Public Storage buckets (<code>property-images</code>).
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-1">
+                            <p className="text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wide flex items-center gap-1.5 leading-none">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                              Running Sandbox Fallback Mode
+                            </p>
+                            <p className="text-[11px] text-amber-700/80 dark:text-amber-400/70">
+                              Supabase environment key parameters are unassigned. Storing property CRUDs, inquiries, newsletter subscribers, and logs inside standard local files (<code>db.json</code>).
+                            </p>
+                          </div>
+                        )}
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono font-bold tracking-wider text-gray-400 uppercase">Confirm Password Code</label>
-                        <input
-                          type="password"
-                          value={newPasswordConfirm}
-                          onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                          placeholder="Re-type password code"
-                          className="w-full px-4 py-3 bg-gray-50 dark:bg-navy-950 border border-gray-200 dark:border-navy-800 rounded-xl text-navy-950 dark:text-white outline-none focus:border-gold-400 transition-colors text-xs font-semibold"
-                          required
-                        />
+                        <div className="p-4 bg-gray-50 dark:bg-navy-950 rounded-2xl space-y-3">
+                          <p className="text-[10px] font-mono font-black text-gray-400 uppercase tracking-widest">Active Setup Guidelines</p>
+                          <ol className="space-y-2.5 text-[11px] text-gray-600 dark:text-gray-300 list-decimal pl-4 font-semibold leading-relaxed">
+                            <li>
+                              Access your <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:text-gold-400 hover:underline">Supabase dashboard</a> and spin up a new Project.
+                            </li>
+                            <li>
+                              Copy the contents of <strong>supabase_setup.sql</strong> from this repository and run it in your project's SQL Editor to build corresponding tables and RLS permissions.
+                            </li>
+                            <li>
+                              In the Storage Panel, create a public bucket named <strong>property-images</strong> to host photo uploads. Ensure RLS allows public download.
+                            </li>
+                            <li>
+                              Integrate keys in your app environment secrets:
+                              <div className="mt-1.5 p-2 bg-white dark:bg-navy-900 border border-gray-150 dark:border-navy-850 rounded-xl space-y-1 text-[10px] font-mono text-gray-500">
+                                <div>SUPABASE_URL="..."</div>
+                                <div>SUPABASE_KEY="..." <span className="text-gray-400">(Service Role or Anon Key)</span></div>
+                              </div>
+                            </li>
+                          </ol>
+                        </div>
                       </div>
-
-                      <button
-                        type="submit"
-                        disabled={settingsLoading}
-                        className="w-full py-3 bg-gold-400 hover:bg-gold-550 text-navy-950 font-black rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        {settingsLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
-                        <span>Update Security Credentials</span>
-                      </button>
-                    </form>
+                    </div>
                   </div>
                 </div>
               )}

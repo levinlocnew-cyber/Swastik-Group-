@@ -220,5 +220,16 @@ export const api = {
       });
       return true;
     }
+  },
+
+  supabase: {
+    status: async (): Promise<{ configured: boolean; url: string | null }> => {
+      try {
+        const res = await fetch(`${API_BASE}/supabase-status`);
+        return await handleResponse(res, 'Failed to query Supabase status.');
+      } catch {
+        return { configured: false, url: null };
+      }
+    }
   }
 };
